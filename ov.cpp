@@ -2,10 +2,15 @@
 using namespace ov;
 using namespace std;
 int main() {
-    runtime::Core core;
-    shared_ptr<Function> model = core.read_model("C:\\Users\\vzlobin\\Downloads\\d\\public\\yolo-v3-tiny-tf\\FP32\\yolo-v3-tiny-tf.xml");
-    Output<Node> out = model->input();
-    cout << "get_any_name:\n";
-    cout << out.get_any_name() << '\n';
+    Core core;
+    shared_ptr<Model> model = core.read_model(
+        "C:\\Users\\vzlobin\\Downloads\\d\\intel\\age-gender-recognition-retail-0013\\FP32\\age-gender-recognition-retail-0013.xml");
+    Shape inShape = model->input().get_shape();
+    preprocess::PrePostProcessor ppp(model);
+    ppp.input().tensor().set_shape({
+        numeric_limits<int64_t>::max(), inShape[1], inShape[2], inShape[3]});
+    try {
+        model = ppp.build();
+    } catch(exception e) {std::cout << e.what();}
     return 0;
 }
