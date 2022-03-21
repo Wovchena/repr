@@ -1,5 +1,4 @@
-#include <openvino/openvino.hpp>
-using namespace ov;
+#include <opencv2/opencv.hpp>
 using namespace std;
 
 static inline void catcher() noexcept {
@@ -18,45 +17,13 @@ static inline void catcher() noexcept {
 
 int main() {
     set_terminate(catcher);
-    {
-        InferRequest ireq = 
-            Core{}.compile_model("C:\\Users\\vzlobin\\Downloads\\d\\intel\\face-detection-retail-0004\\FP32\\face-detection-retail-0004.xml")
-            .create_infer_request();
-        auto start = chrono::steady_clock::now();
-        int nruns = 1000;
-        for (int i = 0; i < nruns; ++i) {
-            ireq.start_async();
-            ireq.wait_for(chrono::milliseconds{0});
-            ireq.wait();
-        }
-        auto end = chrono::steady_clock::now();
-        cout << double((end - start).count()) / nruns / 1000 << '\n';
+    auto start = chrono::steady_clock::now();
+    for (int i = 0; i < 1000; ++i) {
+        // cv::imshow("", cv::Mat(cv::Size{1280, 720}, CV_8UC3, cv::Scalar{0, 0, 0}));
+        cv::imshow("", cv::Mat(cv::Size{300, 300}, CV_8UC3, cv::Scalar{0, 0, 0}));
+        cv::waitKey(1);
     }
-
-    {
-        InferRequest ireq = 
-            Core{}.compile_model("C:\\Users\\vzlobin\\Downloads\\d\\intel\\face-detection-retail-0004\\FP32\\face-detection-retail-0004.xml")
-            .create_infer_request();
-        mutex mtx;
-        condition_variable cv;
-        bool finished = false;
-        auto start = chrono::steady_clock::now();
-        int nruns = 1000;
-            ireq.set_callback([&](exception_ptr) {
-                {
-                    lock_guard<std::mutex> lock(mtx);
-                    finished = true;
-                }
-                cv.notify_one();
-            });
-        for (int i = 0; i < nruns; ++i) {
-            ireq.start_async();
-            unique_lock<std::mutex> lock(mtx);
-            cv.wait(lock, [&]{return finished;});
-            finished = false;
-        }
-        auto end = chrono::steady_clock::now();
-        cout << double((end - start).count()) / nruns / 1000 << '\n';
-    }
+    auto end = chrono::steady_clock::now();
+    cout << double((end - start).count()) / 1000 / 1000 << '\n';
     return 0;
 }
