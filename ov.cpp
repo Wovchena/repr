@@ -1,38 +1,62 @@
 #include <openvino/openvino.hpp>
 using namespace ov;
 using namespace std;
-struct Callback {
-    ov::InferRequest ireq;
-    Callback() {
-        std::cout << "default ctor\n";
+
+static inline void catcher() noexcept {
+    if (std::current_exception()) {
+        try {
+            std::rethrow_exception(std::current_exception());
+        } catch (const std::exception& error) {
+            cerr << error.what() << endl;
+        } catch (...) {
+            cerr << "Non-exception object thrown" << endl;
+        }
+        std::exit(1);
     }
-    Callback(const ov::InferRequest& ireq): ireq{ireq} {
-        std::cout << "ctor\n";
-    }
-    Callback(const Callback& other): ireq{other.ireq} {
-        std::cout << "copy ctor\n";
-    }
-    Callback(Callback&& other): ireq{move(other.ireq)} {
-        std::cout << "move ctor\n";
-    }
-    ~Callback() {
-        cout << "dtor\n";
-    }
-    void operator()(exception_ptr) {
-        std::cout << "callback\n";
-    }
-};
+    std::abort();
+}
 
 int main() {
-    Core core;
-    auto ireq = core.compile_model(core.read_model(
-            "C:\\Users\\vzlobin\\Downloads\\d\\intel\\age-gender-recognition-retail-0013\\FP32\\age-gender-recognition-retail-0013.xml"))
-        .create_infer_request();
-    ireq.set_callback(Callback{ireq});
-    ireq.start_async();
-    ireq.cancel();
-    try {
-        // ireq.set_callback([](exception_ptr){});  // [ INFER_CANCELLED ]
-    } catch(exception e) {std::cout << e.what();}
+    set_terminate(catcher);
+    {
+        InferRequest ireq = 
+            Core{}.compile_model("C:\\Users\\vzlobin\\Downloads\\d\\intel\\face-detection-retail-0004\\FP32\\face-detection-retail-0004.xml")
+            .create_infer_request();
+        auto start = chrono::steady_clock::now();
+        int nruns = 1000;
+        for (int i = 0; i < nruns; ++i) {
+            ireq.start_async();
+            ireq.wait_for(chrono::milliseconds{0});
+            ireq.wait();
+        }
+        auto end = chrono::steady_clock::now();
+        cout << double((end - start).count()) / nruns / 1000 << '\n';
+    }
+
+    {
+        InferRequest ireq = 
+            Core{}.compile_model("C:\\Users\\vzlobin\\Downloads\\d\\intel\\face-detection-retail-0004\\FP32\\face-detection-retail-0004.xml")
+            .create_infer_request();
+        mutex mtx;
+        condition_variable cv;
+        bool finished = false;
+        auto start = chrono::steady_clock::now();
+        int nruns = 1000;
+            ireq.set_callback([&](exception_ptr) {
+                {
+                    lock_guard<std::mutex> lock(mtx);
+                    finished = true;
+                }
+                cv.notify_one();
+            });
+        for (int i = 0; i < nruns; ++i) {
+            ireq.start_async();
+            unique_lock<std::mutex> lock(mtx);
+            cv.wait(lock, [&]{return finished;});
+            finished = false;
+        }
+        auto end = chrono::steady_clock::now();
+        cout << double((end - start).count()) / nruns / 1000 << '\n';
+    }
     return 0;
 }
