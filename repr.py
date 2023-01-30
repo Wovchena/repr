@@ -1,22 +1,22 @@
 import openvino.runtime as ov
-import collections
-import numpy as np
+import sys
 
 
 def main():
-    cml = ov.Core().compile_model(r"c:\Users\vzlobin\Downloads\d\public\yolo-v3-tf\FP32\yolo-v3-tf.xml", "CPU", {'CPU_THROUGHPUT_STREAMS': '4'})
-    empty_ireqs = [cml.create_infer_request() for _ in range(5)]
-    busy_ireqs = collections.deque(maxlen=len(empty_ireqs))
-
-    while True:
-        if empty_ireqs:
-            ireq = empty_ireqs.pop()
-            ireq.start_async({'input_1': np.zeros([1, 416, 416, 3], np.uint8)})
-            busy_ireqs.append(ireq)
-        else:
-            busy_ireqs[0].wait()
-            ireq = busy_ireqs.popleft()
-            empty_ireqs.append(ireq)
+    print('OpenVINO:')
+    print(f"{'Build ':.<39} {ov.get_version()}")
+    if len(sys.argv) != 3:
+        print(f'Usage: {sys.argv[0]} <path_to_model>, <device>')
+        return 1
+    core = ov.Core()
+    model = core.read_model(sys.argv[1])
+    compiled_model = core.compile_model(model, sys.argv[2])
+    keys = compiled_model.get_property('SUPPORTED_PROPERTIES')
+    print("Model:")
+    for k in keys:
+        if k not in ('SUPPORTED_METRICS', 'SUPPORTED_CONFIG_KEYS', 'SUPPORTED_PROPERTIES'):
+            print(k)
+            print(f'  {k}: {compiled_model.get_property(k)}')
 
 
 if __name__ == '__main__':
