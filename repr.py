@@ -1,28 +1,27 @@
-import openvino.runtime as ov
-from openvino.preprocess import PrePostProcessor
-import numpy as np
+import cv2
+from openvino.model_api.models import ClassificationModel
+
+
+def simple():
+    model = ClassificationModel.create_model("resnet-18-pytorch", device="CPU")
+    print(model(cv2.imread("/home/wov/Pictures/dog.jpg")))  # https://storage.openvinotoolkit.org/test_data/images/dog.jpg
+    print(model(cv2.imread("/home/wov/Pictures/cat.jpg")))  # https://storage.openvinotoolkit.org/test_data/images/cat.jpg
+
+
+def infer_sync():
+    model = ClassificationModel.create_model("resnet-18-pytorch", device="CPU")
+    dict_data, input_meta = model.preprocess(cv2.imread("/home/wov/Pictures/dog.jpg"))
+    raw_result = model.inference_adapter.infer_sync(dict_data)
+    print(model.postprocess(raw_result, input_meta))
+    dict_data, input_meta = model.preprocess(cv2.imread("/home/wov/Pictures/cat.jpg"))
+    raw_result = model.inference_adapter.infer_sync(dict_data)
+    print(model.postprocess(raw_result, input_meta))
 
 
 def main():
-    # identity
-    input_shape = [1, 20, 20, 3]
-    param_node = ov.op.Parameter(ov.Type.f32, ov.Shape(input_shape))
-    core = ov.Core()
-    model = ov.Model(param_node, [param_node])
-    identity = core.compile_model(model, "CPU")
-    inp = np.random.random(input_shape) * 224.0 + np.random.random(input_shape)
-    pred = next(iter(identity({0: inp}).values()))
-    print(np.abs(inp - pred).max())  # non zero
-    # scale
-    aligned_inp = pred  # Assume openvino currupts input always in the same way
-    ppp = PrePostProcessor(model)
-    ppp.input().preprocess().scale([255.0])
-    model = ppp.build()
-    scaler = core.compile_model(model, "CPU")
-    scaled_pred = next(iter(scaler({0: inp}).values()))
-    scaled_ref = aligned_inp / 255.0
-    print(np.abs(scaled_pred - scaled_ref).max())  # non zero
+    simple()
+    infer_sync()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
