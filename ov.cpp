@@ -6,7 +6,9 @@ using namespace std;
 
 int main() {
     ov::Core core;
-    auto model = core.read_model("/home/wov/.cache/omz/intel/person-reidentification-retail-0288/FP16/person-reidentification-retail-0288.xml");
-    ov::set_batch(model, {1, 2});
-    core.compile_model(model, "HETERO:GPU");  // fails
+    auto model = core.read_model("/home/wov/.cache/omz/intel/semantic-segmentation-adas-0001/FP16/semantic-segmentation-adas-0001.xml");
+    ov::preprocess::PrePostProcessor ppp(model);
+    ppp.output().tensor().set_element_type(ov::element::f32);
+    model = ppp.build();
+    core.compile_model(model, "GPU");
 }
