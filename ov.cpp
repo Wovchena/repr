@@ -47,16 +47,3 @@ int main(int argc, char* argv[]) {
     }
     ireq2.infer();
 }
-a
-a
-a
-a
-a
-a
-a
-a
-a
-a
-a
-a
-a
