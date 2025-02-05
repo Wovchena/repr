@@ -1,49 +1,46 @@
 #include <openvino/openvino.hpp>
 
+namespace {
+void iter(ov::InferRequest& embed, ov::InferRequest& llm, const ov::Tensor& attention_mask) {
+    embed.infer();
+    llm.set_tensor("attention_mask", attention_mask);
+    llm.infer();
+}
+}
+
 int main(int argc, char* argv[]) {
+    constexpr size_t NUM_ITERS = 100;
     ov::Core core;
-    std::shared_ptr<ov::Model> model = core.read_model(argv[1]);
-    constexpr size_t BATCH_SIZE = 1;
-    std::map<size_t, ov::PartialShape> shapes = {
-        {0, ov::PartialShape{
-            BATCH_SIZE, -1
-        }},
-        {1, ov::PartialShape{
-            BATCH_SIZE, -1
-        }}
-    };
-    std::vector<ov::Output<ov::Node>> inputs = model->inputs();
-    for (size_t idx = 3; idx < inputs.size(); ++idx) {
-        ov::PartialShape shape = inputs.at(idx).get_partial_shape();
-        shape[0] = BATCH_SIZE;
-        shapes.emplace(idx, shape);
-    }
-    model->reshape(shapes);
-    ov::CompiledModel compiled = core.compile_model(model, "CPU");
-    ov::Tensor input_ids{ov::element::i64, {BATCH_SIZE, 3}};
+    ov::InferRequest embed = core.compile_model(argv[1] + std::string{"/openvino_text_embeddings_model.xml"}, "GPU", ov::cache_dir("vlm_cache")).create_infer_request();
+    ov::InferRequest llm = core.compile_model(argv[1] + std::string{"/openvino_language_model.xml"}, "GPU", ov::cache_dir("vlm_cache")).create_infer_request();
+    ov::Tensor input_ids{ov::element::i64, {1, 1}};
     input_ids.data<int64_t>()[0] = 1;
-    input_ids.data<int64_t>()[1] = 408;
-    input_ids.data<int64_t>()[2] = 2176;
-    ov::InferRequest ireq = compiled.create_infer_request();
-    ireq.set_tensor("input_ids", input_ids);
-    ireq.get_tensor("attention_mask").set_shape({BATCH_SIZE, ireq.get_tensor("input_ids").get_size()});
-    std::fill_n(ireq.get_tensor("attention_mask").data<int64_t>(), input_ids.get_size(), 1);
-    ireq.get_tensor("position_ids").set_shape(input_ids.get_shape());
-    std::iota(ireq.get_tensor("position_ids").data<int64_t>(), ireq.get_tensor("position_ids").data<int64_t>() + ireq.get_tensor("position_ids").get_size(), 0);
-    for (size_t idx = 3; idx < inputs.size(); ++idx) {
-        ireq.get_input_tensor(idx).set_shape(inputs.at(idx).get_partial_shape().get_min_shape());
+    embed.set_input_tensor(input_ids);
+    // ov::RemoteContext context = embed.get_compiled_model().get_context();
+    // embed.set_output_tensor(context.create_tensor(ov::element::f32, {1, 1, 3072}));
+    embed.infer();
+    ov::Tensor inputs_embeds = embed.get_output_tensor();
+    llm.set_tensor("inputs_embeds", inputs_embeds);
+    std::vector<int64_t> attention_mask_data(NUM_ITERS, 1);
+    llm.set_tensor("attention_mask", ov::Tensor{ov::element::i64, {1, 1}, attention_mask_data.data()});
+    ov::Tensor position_ids{ov::element::i64, {1, 1}};
+    position_ids.data<int64_t>()[0] = 0;
+    llm.set_tensor("position_ids", position_ids);
+    ov::Tensor beam_idx{ov::element::i32, {1}};
+    beam_idx.data<int32_t>()[0] = 0;
+    llm.set_tensor("beam_idx", beam_idx);
+    llm.infer();
+
+    position_ids.data<int64_t>()[0] = 1;
+    iter(embed, llm, ov::Tensor{ov::element::i64, {1, 2}, attention_mask_data.data()});
+
+    auto t0 = std::chrono::steady_clock::now();
+    for (size_t id = 2; id < NUM_ITERS; ++id) {
+        position_ids.data<int64_t>()[0] = id;
+        input_ids.data<int64_t>()[0] = id;
+        // embed.set_output_tensor(context.create_tensor(ov::element::f32, {1, 1, 3072}));
+        iter(embed, llm, ov::Tensor{ov::element::i64, {1, id+1}, attention_mask_data.data()});
     }
-    ireq.infer();
-    ov::InferRequest ireq2 = ireq;
-    // ireq2 = compiled.create_infer_request();  // This fixes the problem
-    ireq2.get_tensor("input_ids").set_shape({BATCH_SIZE, 1});
-    ireq2.get_tensor("input_ids").data<int64_t>()[0] = 408;
-    ireq2.get_tensor("attention_mask").set_shape({BATCH_SIZE, ireq.get_tensor("attention_mask").get_size() + 1});
-    std::fill_n(ireq2.get_tensor("attention_mask").data<int64_t>(), ireq2.get_tensor("attention_mask").get_size(), 1);
-    ireq2.get_tensor("position_ids").set_shape({BATCH_SIZE, 1});
-    ireq2.get_tensor("position_ids").data<int64_t>()[0] = ireq2.get_tensor("attention_mask").get_size() - 1;
-    for (size_t tensor_idx = 3; tensor_idx < inputs.size(); ++tensor_idx) {
-        ireq2.set_input_tensor(tensor_idx, ireq.get_output_tensor(tensor_idx - 2));
-    }
-    ireq2.infer();
+    auto t1 = std::chrono::steady_clock::now();
+    std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << '\n';
 }
