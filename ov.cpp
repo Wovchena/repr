@@ -9,15 +9,16 @@ void iter(ov::InferRequest& embed, ov::InferRequest& llm, const ov::Tensor& atte
 }
 
 int main(int argc, char* argv[]) {
-    constexpr size_t NUM_ITERS = 100;
+    constexpr size_t NUM_ITERS = 9000;
     ov::Core core;
     ov::InferRequest embed = core.compile_model(argv[1] + std::string{"/openvino_text_embeddings_model.xml"}, "GPU", ov::cache_dir("vlm_cache")).create_infer_request();
     ov::InferRequest llm = core.compile_model(argv[1] + std::string{"/openvino_language_model.xml"}, "GPU", ov::cache_dir("vlm_cache")).create_infer_request();
     ov::Tensor input_ids{ov::element::i64, {1, 1}};
     input_ids.data<int64_t>()[0] = 1;
     embed.set_input_tensor(input_ids);
-    // ov::RemoteContext context = embed.get_compiled_model().get_context();
-    // embed.set_output_tensor(context.create_tensor(ov::element::f32, {1, 1, 3072}));
+    ov::RemoteContext context = embed.get_compiled_model().get_context();
+    // Uncomment to enable remote tensor
+    // embed.set_output_tensor(context.create_tensor(ov::element::f32, {1, 1, 192}));
     embed.infer();
     ov::Tensor inputs_embeds = embed.get_output_tensor();
     llm.set_tensor("inputs_embeds", inputs_embeds);
@@ -38,7 +39,6 @@ int main(int argc, char* argv[]) {
     for (size_t id = 2; id < NUM_ITERS; ++id) {
         position_ids.data<int64_t>()[0] = id;
         input_ids.data<int64_t>()[0] = id;
-        // embed.set_output_tensor(context.create_tensor(ov::element::f32, {1, 1, 3072}));
         iter(embed, llm, ov::Tensor{ov::element::i64, {1, id+1}, attention_mask_data.data()});
     }
     auto t1 = std::chrono::steady_clock::now();
