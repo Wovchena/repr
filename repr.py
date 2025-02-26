@@ -1,23 +1,22 @@
-import openvino.runtime as ov
-from openvino.preprocess import PrePostProcessor
-import numpy as np
+import transformers
+import openvino
+import openvino_tokenizers
 
 
 def main():
-    DIVIDEND = float.fromhex('0x1.b7f1200000000p+0')
-    NP_DIVIDEND = np.array([DIVIDEND], np.float32)
-    DIVISOR = float.fromhex('0x1.8000000000000p+0')  # 1.5
-    NP_DIVISOR = np.array([DIVISOR], np.float32)
-    assert DIVIDEND.hex() == NP_DIVIDEND.item().hex()
-    assert DIVISOR.hex() == NP_DIVISOR.item().hex()
-    param_node = ov.op.Parameter(ov.Type.f32, ov.Shape([1]))
-    model = ov.Model(param_node, [param_node])
-    ppp = PrePostProcessor(model)
-    ppp.input().preprocess().scale(NP_DIVISOR)
-    scaler = ov.Core().compile_model(ppp.build(), "CPU")
-    scaled_pred = scaler({0: NP_DIVIDEND})[0]
-    print((NP_DIVIDEND / NP_DIVISOR).item().hex(), scaled_pred.item().hex())
-    assert (NP_DIVIDEND / NP_DIVISOR).item().hex() == scaled_pred.item().hex()
+    input_ids = openvino.op.Constant(openvino.Type.i64, openvino.Shape([0, 0]), []).output(0)
+    input_ids.get_tensor().set_names({"input_ids"})
+    attention_mask = openvino.op.Constant(openvino.Type.i64, openvino.Shape([0, 0]), []).output(0)
+    attention_mask.get_tensor().set_names({"attention_mask"})
+    model = openvino.Model(
+        [openvino.op.Result(input_ids), openvino.op.Result(attention_mask)],
+        [openvino.op.Parameter(openvino.Type.string, openvino.Shape([1]))]
+    )
+    core = openvino.Core()
+    core.compile_model(model, "CPU")
+    tokenizer = transformers.AutoProcessor.from_pretrained("katuni4ka/tiny-random-llava-next").tokenizer
+    ov_tokenizer = openvino_tokenizers.convert_tokenizer(tokenizer)
+    core.compile_model(ov_tokenizer, "CPU")
 
 
 if __name__ == '__main__':
