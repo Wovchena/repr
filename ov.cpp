@@ -5,11 +5,10 @@ int main(int argc, char* argv[]) {
     using namespace std;
     volatile size_t vector_size = 0;
     vector<int> vector(vector_size);
-    volatile size_t do_not_optimize_away = 0;
     for (size_t idx = 0; idx < vector.size(); ++idx) {
-        do_not_optimize_away = idx;
+        volatile size_t do_not_optimize_away = idx;
+        (void)do_not_optimize_away;
     }
-    std::cout << do_not_optimize_away << '\n';
     // ov::Tensor tensor{ov::element::f32, {0}};
     // struct TensorIterator {
     //     size_t idx;
