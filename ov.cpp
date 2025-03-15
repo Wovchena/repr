@@ -1,6 +1,6 @@
 #include <openvino/openvino.hpp>
 // A command to remind myself how to disassemble after compiling Release version but link with OV Debug because I usually build OV in Debug. -ggdb for debug symbols but -O3 and -DNDEBUG for Release: Treat headers as system's to suppress their warnings.
-// g++ -ggdb -O3 -DNDEBUG -Wall -pedantic -Werror -Xlinker -rpath -Xlinker /home/vzlobin/r/v/bin/intel64/Debug -isystem /home/vzlobin/r/v/src/core/include/ -isystem /home/vzlobin/r/v/src/inference/include/ ov.cpp /home/vzlobin/r/v/bin/intel64/Debug/libopenvino.so.2025.1.0 && gdb -ex 'set pagination off' -ex 'disassemble /s main' --args ./a.out arg
+// g++ -ggdb -O3 -DNDEBUG -Wall -Wextra -pedantic -Werror -Xlinker -rpath -Xlinker /home/vzlobin/r/v/bin/intel64/Debug -isystem /home/vzlobin/r/v/src/core/include/ -isystem /home/vzlobin/r/v/src/inference/include/ ov.cpp /home/vzlobin/r/v/bin/intel64/Debug/libopenvino.so.2025.1.0 && gdb -ex 'set pagination off' -ex 'disassemble /s main' --args ./a.out arg
 int main(int argc, char* argv[]) {
     using namespace std;
     volatile size_t vector_size = 0;
